@@ -46,7 +46,7 @@
 				}
 				return result;
 			},
-			////根据文件序号获取文件
+			//根据文件序号获取文件
 			getFile : function(index,files){
 				for(var i=0;i<files.length;i++){	   
 					if(files[i].index == index){
@@ -54,6 +54,14 @@
 					}
 				}
 				return null;
+			},
+			//获取HTML5特性支持情况
+			checkSupport : function(){
+				var input = document.createElement('input');
+				var fileSupport = !!(window.File && window.FileList);
+				var xhr = new XMLHttpRequest();
+				var fd = !!window.FormData;
+				return 'multiple' in input && fileSupport && 'onprogress' in xhr && 'upload' in xhr && fd ;
 			}
 		};
 
@@ -66,6 +74,11 @@
 				container : _this,
 				filteredFiles : [],//过滤后的文件数组
 				init : function(){
+					if(!F.checkSupport()){
+						_this.html('您的浏览器不支持HTML5文件上传，请使用更高版本的浏览器！');
+						return;
+					}
+
 					var inputStr = '<input id="select_btn_'+instanceNumber+'" class="selectbtn" style="display:none;" type="file" name="fileselect[]"';
 					inputStr += option.multi ? ' multiple' : '';
 					inputStr += ' accept="';
