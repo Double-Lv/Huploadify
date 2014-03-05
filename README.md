@@ -35,6 +35,10 @@ jQuery文件上传插件，HTML5版uploadify，保持与uploadify一致的API，
     onUploadError:null, //上传失败的动作
     onInit:null,//初始化时的动作
     onCancel:null//删除掉某个文件后的回调函数，可传入参数file
+    onClearQueue:null,//清空上传队列后的回调函数，在调用cancel并传入参数*时触发
+    onDestroy:null,//在调用destroy方法时触发
+    onSelect:null,//选择文件后的回调函数，可传入参数file
+    onQueueComplete:null//队列中的所有文件上传完成后触发
 #####使用方法
 首先页面上需要一个容器，通常是一个div，如：
 
@@ -52,17 +56,30 @@ jQuery文件上传插件，HTML5版uploadify，保持与uploadify一致的API，
         showUploadedSize:true,
         removeTimeout:9999999,
         uploader:'upload.php',
-        onUploadStart:function(){
-            console.log('开始上传');
-            },
-        onInit:function(){
+        onUploadStart:function(file){
+            console.log(file.name+'开始上传');
+        },
+        onInit:function(obj){
             console.log('初始化');
-            },
-        onUploadComplete:function(){
-            console.log('上传完成');
-            },
+            console.log(obj);
+        },
+        onUploadComplete:function(file){
+            console.log(file.name+'上传完成');
+        },
         onCancel:function(file){
-            console.log(file);
+            console.log(file.name+'删除成功');
+        },
+        onClearQueue:function(queueItemCount){
+            console.log('有'+queueItemCount+'个文件被删除了');
+        },
+        onDestroy:function(){
+            console.log('destroyed!');
+        },
+        onSelect:function(file){
+            console.log(file.name+'加入上传队列');
+        },
+        onQueueComplete:function(queueData){
+            console.log('队列中的文件全部上传完成',queueData);
         }
     });
 
