@@ -1,5 +1,5 @@
 <?php
-$filename = $_FILES['file']['name'];
+$filename = iconv('UTF-8', 'GBK', $_FILES['file']['name']); 
 $key = $_POST['key'];
 $key2 = $_POST['key2'];
 if ($filename) {
