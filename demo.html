@@ -20,17 +20,30 @@ $(function(){
 		showUploadedSize:true,
 		removeTimeout:9999999,
 		uploader:'upload.php',
-		onUploadStart:function(){
-			console.log('开始上传');
-			},
-		onInit:function(){
+		onUploadStart:function(file){
+			console.log(file.name+'开始上传');
+		},
+		onInit:function(obj){
 			console.log('初始化');
-			},
-		onUploadComplete:function(){
-			console.log('上传完成');
-			},
+			console.log(obj);
+		},
+		onUploadComplete:function(file){
+			console.log(file.name+'上传完成');
+		},
 		onCancel:function(file){
-			console.log(file);
+			console.log(file.name+'删除成功');
+		},
+		onClearQueue:function(queueItemCount){
+			console.log('有'+queueItemCount+'个文件被删除了');
+		},
+		onDestroy:function(){
+			console.log('destroyed!');
+		},
+		onSelect:function(file){
+			console.log(file.name+'加入上传队列');
+		},
+		onQueueComplete:function(queueData){
+			console.log('队列中的文件全部上传完成',queueData);
 		}
 	});
 

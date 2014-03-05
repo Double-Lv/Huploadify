@@ -20,7 +20,11 @@
 			onUploadComplete:null,//上传完成的动作
 			onUploadError:null, //上传失败的动作
 			onInit:null,//初始化时的动作
-			onCancel:null//删除掉某个文件后的回调函数，可传入参数file
+			onCancel:null,//删除掉某个文件后的回调函数，可传入参数file
+			onClearQueue:null,//清空上传队列后的回调函数，在调用cancel并传入参数*时触发
+			onDestroy:null,//在调用destroy方法时触发
+			onSelect:null,//选择文件后的回调函数，可传入参数file
+			onQueueComplete:null//队列中的所有文件上传完成后触发
 		}
 			
 		var option = $.extend(defaults,opts);
@@ -46,7 +50,7 @@
 				}
 				return result;
 			},
-			//根据文件序号获取文件
+			////根据文件序号获取文件
 			getFile : function(index,files){
 				for(var i=0;i<files.length;i++){	   
 					if(files[i].index == index){
@@ -54,31 +58,18 @@
 					}
 				}
 				return null;
-			},
-			//获取HTML5特性支持情况
-			checkSupport : function(){
-				var input = document.createElement('input');
-				var fileSupport = !!(window.File && window.FileList);
-				var xhr = new XMLHttpRequest();
-				var fd = !!window.FormData;
-				return 'multiple' in input && fileSupport && 'onprogress' in xhr && 'upload' in xhr && fd ;
 			}
 		};
 
-		var uploadManager = null;
+		var returnObj = null;
 
 		this.each(function(index, element){
 			var _this = $(element);
 			var instanceNumber = $('.uploadify').length+1;
-			uploadManager = {
+			var uploadManager = {
 				container : _this,
 				filteredFiles : [],//过滤后的文件数组
 				init : function(){
-					if(!F.checkSupport()){
-						_this.html('您的浏览器不支持HTML5文件上传，请使用更高版本的浏览器！');
-						return;
-					}
-
 					var inputStr = '<input id="select_btn_'+instanceNumber+'" class="selectbtn" style="display:none;" type="file" name="fileselect[]"';
 					inputStr += option.multi ? ' multiple' : '';
 					inputStr += ' accept="';
@@ -88,7 +79,72 @@
 					inputStr += option.buttonText;
 					inputStr += '</a>';
 					var uploadFileListStr = '<div id="file_upload_'+instanceNumber+'-queue" class="uploadify-queue"></div>';
-					_this.append(inputStr+uploadFileListStr);	
+					_this.append(inputStr+uploadFileListStr);
+
+					//初始化返回的实例
+					returnObj =  {
+						instanceNumber : instanceNumber,
+						upload : function(fileIndex){
+							if(fileIndex === '*'){
+								for(var i=0,len=uploadManager.filteredFiles.length;i<len;i++){
+									uploadManager._uploadFile(uploadManager.filteredFiles[i]);
+								}
+							}
+							else{
+								var file = F.getFile(fileIndex,uploadManager.filteredFiles);
+								file && uploadManager._uploadFile(file);	
+							}
+						},
+						cancel : function(fileIndex){
+							if(fileIndex === '*'){
+								var len=uploadManager.filteredFiles.length;
+								for(var i=len-1;i>=0;i--){
+									uploadManager._deleteFile(uploadManager.filteredFiles[i]);
+								}
+								option.onClearQueue && option.onClearQueue(len);
+							}
+							else{
+								var file = F.getFile(fileIndex,uploadManager.filteredFiles);
+								file && uploadManager._deleteFile(file);
+							}
+						},
+						disable : function(instanceID){
+							var parent = instanceID ? $('file_upload_'+instanceID+'-button') : $('body');
+							parent.find('.uploadify-button').css('background-color','#888').off('click');
+						},
+						ennable : function(instanceID){
+							//点击上传按钮时触发file的click事件
+							var parent = instanceID ? $('file_upload_'+instanceID+'-button') : $('body');
+						  	parent.find('.uploadify-button').css('background-color','#707070').on('click',function(){
+								parent.find('.selectbtn').trigger('click');
+							});
+						},
+						destroy : function(){
+							uploadManager.container.html('');
+							uploadManager = null;
+							option.onDestroy && option.onDestroy();
+						},
+						settings : function(name,value){
+							if(arguments.length==1){
+								return option[name];
+							}
+							else{
+								if(name=='formData'){
+									option.formData = $.extend(option.formData, value);
+								}
+								else{
+									option[name] = value;
+								}
+							}
+						},
+						Huploadify : function(){
+							var method = arguments[0];
+							if(method in this){
+								Array.prototype.splice.call(arguments, 0, 1);
+								this[method].apply(this[method], arguments);
+							}
+						}
+					};
 
 					//文件选择控件选择
 					var fileInput = this._getInputBtn();
@@ -103,7 +159,7 @@
 						_this.find('.selectbtn').trigger('click');
 					});
 				  
-					option.onInit && option.onInit();
+					option.onInit && option.onInit(returnObj);
 				},
 				_filter: function(files) {		//选择文件组的过滤方法
 					var arr = [];
@@ -153,9 +209,13 @@
 						var percentText = '<span class="up_percent">0%</span>';
 						$html.find('.uploadify-progress').after(percentText);
 					}
+
+					//触发select动作
+					option.onSelect && option.onSelect(file);
+
 					//判断是否是自动上传
 					if(option.auto){
-						uploadManager.uploadFile(file);
+						uploadManager._uploadFile(file);
 					}
 					else{
 						//如果配置非自动上传，绑定上传事件
@@ -182,8 +242,10 @@
 			  		var fileCount = _this.find('.uploadify-queue .uploadify-queue-item').length;//队列中已经有的文件个数
 		  			for(var i=0,len=files.length;i<len;i++){
 		  				files[i].index = ++fileCount;
+		  				files[i].status = 0;//标记为未开始上传
 		  				uploadManager.filteredFiles.push(files[i]);
-		  				uploadManager._renderFile(files[i]);
+		  				var l = uploadManager.filteredFiles.length;
+		  				uploadManager._renderFile(uploadManager.filteredFiles[l-1]);
 		  			}
 				},
 				//删除文件
@@ -205,7 +267,7 @@
 					option.showUploadedSize && thisfile.find('.uploadedsize').text(thisfile.find('.totalsize').text());
 					option.showUploadedPercent && thisfile.find('.up_percent').text('100%');	
 				},
-				onProgress: function(file, loaded, total) {
+				onProgress : function(file, loaded, total) {
 					var eleProgress = _this.find('#fileupload_'+instanceNumber+'_'+file.index+' .uploadify-progress');
 					var percent = (loaded / total * 100).toFixed(2) +'%';
 					if(option.showUploadedSize){
@@ -216,6 +278,26 @@
 						eleProgress.nextAll('.up_percent').text(percent);	
 					}
 					eleProgress.children('.uploadify-progress-bar').css('width',percent);
+			  	},
+			  	_allFilesUploaded : function(){
+		  			var queueData = {
+						uploadsSuccessful : 0,
+						uploadsErrored : 0
+					};
+			  		for(var i=0,len=uploadManager.filteredFiles.length; i<len; i++){
+			  			var s = uploadManager.filteredFiles[i].status;
+			  			if(s===0 || s===1){
+			  				queueData = false;
+			  				break;
+			  			}
+			  			else if(s===2){
+			  				queueData.uploadsSuccessful++;
+			  			}
+			  			else if(s===3){
+			  				queueData.uploadsErrored++;
+			  			}
+			  		}
+			  		return queueData;
 			  	},
 				//上传文件
 				_uploadFile : function(file){
@@ -235,6 +317,7 @@
 							if(xhr.readyState == 4){
 								if(xhr.status == 200){
 									uploadManager._regulateView(file);
+									file.status = 2;//标记为上传成功
 									option.onUploadSuccess && option.onUploadSuccess(file, xhr.responseText);
 									//在指定的间隔时间后删掉进度条
 									setTimeout(function(){
@@ -242,93 +325,44 @@
 									},option.removeTimeout);
 								}
 								else {
+									file.status = 3;//标记为上传失败
 									option.onUploadError && option.onUploadError(file, xhr.responseText);		
 								}
 								option.onUploadComplete && option.onUploadComplete(file,xhr.responseText);
+								
+								//检测队列中的文件是否全部上传完成，执行onQueueComplete
+								if(option.onQueueComplete){
+									var queueData = uploadManager._allFilesUploaded();
+									queueData && option.onQueueComplete(queueData);	
+								}
+
 								//清除文件选择框中的已有值
 								uploadManager._getInputBtn().val('');
 							}
 						}
 
-						option.onUploadStart && option.onUploadStart();
-						// 开始上传
-						xhr.open(option.method, option.uploader, true);
-						xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
-						var fd = new FormData();
-						fd.append(option.fileObjName,file);
-						if(option.formData){
-						 	for(key in option.formData){
-						  		fd.append(key,option.formData[key]);
-						  	}
+						if(file.status===0){
+							file.status = 1;//标记为正在上传
+							option.onUploadStart && option.onUploadStart(file);
+							// 开始上传
+							xhr.open(option.method, option.uploader, true);
+							xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+							var fd = new FormData();
+							fd.append(option.fileObjName,file);
+							if(option.formData){
+							 	for(key in option.formData){
+							  		fd.append(key,option.formData[key]);
+							  	}
+							}
+							xhr.send(fd);
 						}
-						xhr.send(fd);
+						
 				  	}
 				}
 			};
 
 			uploadManager.init();
 		});
-		
-		var returnObj =  {
-			upload : function(fileIndex){
-				if(fileIndex === '*'){
-					for(var i=0,len=uploadManager.filteredFiles.length;i<len;i++){
-						uploadManager._uploadFile(uploadManager.filteredFiles[i]);
-					}
-				}
-				else{
-					var file = F.getFile(fileIndex,uploadManager.filteredFiles);
-					file && uploadManager._uploadFile(file);	
-				}
-			},
-			cancel : function(fileIndex){
-				if(fileIndex === '*'){
-					var len=uploadManager.filteredFiles.length;
-					for(var i=len-1;i>=0;i--){
-						uploadManager._deleteFile(uploadManager.filteredFiles[i]);
-					}
-				}
-				else{
-					var file = F.getFile(fileIndex,uploadManager.filteredFiles);
-					file && uploadManager._deleteFile(file);
-				}
-			},
-			disable : function(instanceID){
-				var parent = instanceID ? $('file_upload_'+instanceID+'-button') : $('body');
-				parent.find('.uploadify-button').css('background-color','#888').off('click');
-			},
-			ennable : function(instanceID){
-				//点击上传按钮时触发file的click事件
-				var parent = instanceID ? $('file_upload_'+instanceID+'-button') : $('body');
-			  	parent.find('.uploadify-button').css('background-color','#707070').on('click',function(){
-					parent.find('.selectbtn').trigger('click');
-				});
-			},
-			destroy : function(){
-				uploadManager.container.html('');
-				uploadManager = null;
-			},
-			settings : function(name,value){
-				if(arguments.length==1){
-					return option[name];
-				}
-				else{
-					if(name=='formData'){
-						option.formData = $.extend(option.formData, value);
-					}
-					else{
-						option[name] = value;
-					}
-				}
-			},
-			Huploadify : function(){
-				var method = arguments[0];
-				if(method in this){
-					Array.prototype.splice.call(arguments, 0, 1);
-					this[method].apply(this[method], arguments);
-				}
-			}
-		};
 		
 		return returnObj;
 
